@@ -175,6 +175,58 @@ def drawPieces(screen, board):
             if piece != "--":  # Check for empty square
                 screen.blit(IMAGES[piece], p.Rect(c * SQ_SIZE, r * SQ_SIZE, SQ_SIZE, SQ_SIZE))
 
+def checkForPinsAndChecks(gs, isWhite):
+    pins = []  # Gefesselte Figuren
+    checks = []  # Schachbedrohungen
+    in_check = False
+
+    # Position des Königs finden
+    king_row, king_col = None, None
+    for r in range(8):
+        for c in range(8):
+            if gs.board[r][c] == ('wK' if isWhite else 'bK'):
+                king_row, king_col = r, c
+                break
+
+    # Richtungen für potenzielle Angreifer (Türme, Läufer, Dame)
+    directions = [
+        (-1, 0), (1, 0), (0, -1), (0, 1),  # Vertikal und horizontal
+        (-1, -1), (-1, 1), (1, -1), (1, 1)  # Diagonal
+    ]
+
+    for d in directions:
+        possible_pin = None
+        for i in range(1, 8):
+            end_row, end_col = king_row + d[0] * i, king_col + d[1] * i
+            if 0 <= end_row < 8 and 0 <= end_col < 8:
+                piece = gs.board[end_row][end_col]
+                if piece != "--":
+                    if piece[0] == ('w' if isWhite else 'b'):
+                        if possible_pin is None:
+                            possible_pin = (end_row, end_col, d[0], d[1])
+                        else:
+                            break  # Zweite eigene Figur -> kein Pin
+                    else:
+                        piece_type = piece[1]
+                        if (piece_type == "R" and d in directions[:4]) or \
+                           (piece_type == "B" and d in directions[4:]) or \
+                           (piece_type == "Q") or \
+                           (piece_type == "P" and i == 1 and ((isWhite and d in [(-1, -1), (-1, 1)]) or (not isWhite and d in [(1, -1), (1, 1)]))) or \
+                           (piece_type == "K" and i == 1):
+                            if possible_pin is None:
+                                in_check = True
+                                checks.append((end_row, end_col, d[0], d[1]))
+                            else:
+                                pins.append(possible_pin)
+                            break
+                        else:
+                            break
+            else:
+                break
+
+    return in_check, pins, checks
+
+
 def isValidMove(start_sq, end_sq, board, gs):
     start_row, start_col = start_sq
     end_row, end_col = end_sq
@@ -398,6 +450,21 @@ def checkForPinsAndChecks(gs, isWhite):
                 break  # Außerhalb des Bretts
 
     return in_check, pins, checks
+
+def isCheckmateOrStalemate(gs, isWhite):
+    for r in range(8):
+        for c in range(8):
+            if gs.board[r][c][0] == ('w' if isWhite else 'b'):
+                for row in range(8):
+                    for col in range(8):
+                        if isValidMove((r, c), (row, col), gs.board, gs):
+                            return False  # Es gibt noch legale Züge
+
+    if gs.in_check:
+        print("Checkmate!")
+    else:
+        print("Stalemate!")
+    return True
 
 
 
