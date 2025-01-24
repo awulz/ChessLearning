@@ -77,9 +77,12 @@ def main():
                     # Überprüfe, ob der richtige Spieler am Zug ist
                     if(white_to_move and piece [0] == 'w') or (not white_to_move and piece[0] == 'b'):
                         if isValidMove(start_sq, end_sq, gs.board, gs):
-                            # Erfolgreichen Zug durchführen
-                            gs.board[end_sq[0]][end_sq[1]] = gs.board[start_sq[0]][start_sq[1]]
-                            gs.board[start_sq[0]][start_sq[1]] = "--"
+                            if makeMove(start_sq, end_sq, gs):
+                                white_to_move = not white_to_move # Spielerwechsel nach erfolgreichem Zug
+                                print("Move successful. Next player!")
+
+                            
+                                
                             
                             
 
@@ -112,8 +115,7 @@ def main():
                                     else:
                                         gs.black_rook_king_moved = True
 
-                            white_to_move = not white_to_move # Spielerwechsel nach erfolgreichem Zug
-                            print("Move successful. Next player!")
+                            
 
                             # Überprüfe nach dem Zug auf Schach und Pins
                             gs.in_check, gs.pins, gs.checks = checkForPinsAndChecks(gs, white_to_move)
@@ -199,24 +201,28 @@ def checkForPinsAndChecks(gs, isWhite):
     checks = []  # Schachbedrohungen
     in_check = False
 
-    # Position des Königs finden
-    king_row, king_col = None, None
+    # Finde die Position des Königs
+    king_pos = None
+    king_symbol = 'wK' if isWhite else 'bK'
     for r in range(8):
         for c in range(8):
-            if gs.board[r][c] == ('wK' if isWhite else 'bK'):
-                king_row, king_col = r, c
+            if gs.board[r][c] == king_symbol:
+                king_pos = (r, c)
                 break
+    
+    if king_pos is None:
+        return False, pins, checks  # König nicht gefunden (Fehler)
 
-    # Richtungen für potenzielle Angreifer (Türme, Läufer, Dame)
+    # Richtungen für mögliche Angriffe (Turm, Läufer, Dame)
     directions = [
-        (-1, 0), (1, 0), (0, -1), (0, 1),  # Vertikal und horizontal
+        (-1, 0), (1, 0), (0, -1), (0, 1),  # Vertikal, horizontal
         (-1, -1), (-1, 1), (1, -1), (1, 1)  # Diagonal
     ]
 
     for d in directions:
         possible_pin = None
         for i in range(1, 8):
-            end_row, end_col = king_row + d[0] * i, king_col + d[1] * i
+            end_row, end_col = king_pos[0] + d[0] * i, king_pos[1] + d[1] * i
             if 0 <= end_row < 8 and 0 <= end_col < 8:
                 piece = gs.board[end_row][end_col]
                 if piece != "--":
@@ -241,9 +247,23 @@ def checkForPinsAndChecks(gs, isWhite):
                         else:
                             break
             else:
-                break
+                break  # Außerhalb des Bretts
 
+    # Überprüfung auf Springer-Angriffe
+    knight_moves = [
+        (-2, -1), (-2, 1), (2, -1), (2, 1),
+        (-1, -2), (-1, 2), (1, -2), (1, 2)
+    ]
+    for move in knight_moves:
+        row, col = king_pos[0] + move[0], king_pos[1] + move[1]
+        if 0 <= row < 8 and 0 <= col < 8:
+            piece = gs.board[row][col]
+            if piece[0] != ('w' if isWhite else 'b') and piece[1] == 'N':
+                in_check = True
+                checks.append((row, col, move[0], move[1]))
+    
     return in_check, pins, checks
+
 
 
 def isValidMove(start_sq, end_sq, board, gs):
@@ -280,28 +300,26 @@ def isValidMove(start_sq, end_sq, board, gs):
 
     # Überprüfen, ob der Zug den König im Schach lässt
 def doesMoveLeaveKingInCheck(start_sq, end_sq, board, gs):
-    temp_board = [row[:] for row in board]  # Kopie des Spielfelds erstellen
+    temp_board = [row[:] for row in board]  # Kopiere das aktuelle Board
     temp_board[end_sq[0]][end_sq[1]] = temp_board[start_sq[0]][start_sq[1]]
     temp_board[start_sq[0]][start_sq[1]] = "--"
 
-    king_color = "wK" if board[start_sq[0]][start_sq[1]][0] == 'w' else "bK"
-    
-    # Königslage suchen
+    king_color = "w" if board[start_sq[0]][start_sq[1]][0] == 'w' else "b"
+
+    # Finde die Position des Königs im neuen Zustand
     king_pos = None
     for r in range(8):
         for c in range(8):
-            if temp_board[r][c] == king_color:
+            if temp_board[r][c] == (king_color + "K"):
                 king_pos = (r, c)
                 break
 
     if king_pos is None:
-        print("FEHLER: König nicht gefunden auf dem Brett!")
+        print("Error: König nicht gefunden nach dem Zug!")
         return True
 
-    # Prüfen, ob der König im Schach steht
-    in_check, _, _ = checkForPinsAndChecks(gs, king_color[0] == 'w')
-    if in_check:
-        print(f"König bleibt im Schach nach {start_sq} -> {end_sq}")
+    # Prüfe, ob der König im neuen Zustand im Schach steht
+    in_check, _, _ = checkForPinsAndChecks(GameState(board=temp_board), king_color == 'w')
     return in_check
 
 
@@ -314,11 +332,12 @@ def canCastleKingside(board, isWhite, gs):
     if not isWhite and (gs.black_king_moved or gs.black_rook_king_moved):
         return False
 
-    # Prüfen, ob Felder zwischen König und Turm frei sind
+    # Prüfen, ob Felder zwischen König und Turm frei sind und nicht angegriffen werden
     if board[row][5] == "--" and board[row][6] == "--":
-        return True
+        if not doesMoveLeaveKingInCheck((row, 4), (row, 5), board, gs) and \
+           not doesMoveLeaveKingInCheck((row, 4), (row, 6), board, gs):
+            return True
     return False
-
 
 def canCastleQueenside(board, isWhite, gs):
     row = 7 if isWhite else 0
@@ -328,10 +347,13 @@ def canCastleQueenside(board, isWhite, gs):
     if not isWhite and (gs.black_king_moved or gs.black_rook_queen_moved):
         return False
 
-    # Prüfen, ob Felder zwischen König und Turm frei sind
+    # Prüfen, ob Felder zwischen König und Turm frei sind und nicht angegriffen werden
     if board[row][1] == "--" and board[row][2] == "--" and board[row][3] == "--":
-        return True
+        if not doesMoveLeaveKingInCheck((row, 4), (row, 3), board, gs) and \
+           not doesMoveLeaveKingInCheck((row, 4), (row, 2), board, gs):
+            return True
     return False
+
   
 def isValidPawnMove (start_sq, end_sq, board, color):
     start_row, start_col = start_sq
@@ -555,6 +577,21 @@ def doesMoveLeaveKingInCheck(start_sq, end_sq, board, gs):
     in_check, _, _ = checkForPinsAndChecks(gs, king_color[0] == 'w')
     return in_check
 
+def makeMove(start_sq, end_sq, gs):
+    piece = gs.board[start_sq[0]][start_sq[1]]
+
+    if doesMoveLeaveKingInCheck(start_sq, end_sq, gs.board, gs):
+        print("Ungültiger Zug: König bleibt im Schach!")
+        return False
+
+    gs.board[end_sq[0]][end_sq[1]] = piece
+    gs.board[start_sq[0]][start_sq[1]] = "--"
+
+    gs.in_check, gs.pins, gs.checks = checkForPinsAndChecks(gs, gs.whiteToMove)
+    if gs.in_check:
+        print("Check!")
+
+    return True
 
 
 
