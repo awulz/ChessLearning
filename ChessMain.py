@@ -66,11 +66,41 @@ def main():
                     # Überprüfe, ob der richtige Spieler am Zug ist
                     if(white_to_move and piece [0] == 'w') or (not white_to_move and piece[0] == 'b'):
                         if isValidMove(start_sq, end_sq, gs.board):
+
+                            # Rochade erkennen und ausführen
+                            if piece[1] == "K" and abs(start_sq[1] - end_sq[1]) == 2:
+                                if end_sq[1] == 6:  # Kingside castling (kurze Rochade)
+                                    gs.board[start_sq[0]][5] = gs.board[start_sq[0]][7]  # Turm nach f1/f8
+                                    gs.board[start_sq[0]][7] = "--"
+                                elif end_sq[1] == 2:  # Queenside castling (lange Rochade)
+                                    gs.board[start_sq[0]][3] = gs.board[start_sq[0]][0]  # Turm nach d1/d8
+                                    gs.board[start_sq[0]][0] = "--"
+                            
+                            # König oder Turm an neue Position setzen
                             gs.board[end_sq[0]][end_sq[1]] = gs.board[start_sq[0]][start_sq[1]]
                             gs.board[start_sq[0]][start_sq[1]] = "--"
+
+                            # Rochade-Berechtigungen entfernen
+                            if piece[1] == "K":
+                                if white_to_move:
+                                    gs.white_king_moved = True
+                                else:
+                                    gs.black_king_moved = True
+                            if piece[1] == "R":
+                                if start_sq[1] == 0:  # Turm auf der a-Linie (Queenside)
+                                    if white_to_move:
+                                        gs.white_rook_queen_moved = True
+                                    else:
+                                        gs.black_rook_queen_moved = True
+                                elif start_sq[1] == 7:  # Turm auf der h-Linie (Kingside)
+                                    if white_to_move:
+                                        gs.white_rook_king_moved = True
+                                    else:
+                                        gs.black_rook_king_moved = True
+
                             white_to_move = not white_to_move # Spielerwechsel nach erfolgreichem Zug
                             print("Move successful. Next player!")
-
+                       
                         else:
                             print("Invalid move!")
                     else:
