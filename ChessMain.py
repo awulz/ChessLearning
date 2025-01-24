@@ -30,7 +30,7 @@ def main():
     loadImages()  # Only do this once, before the while loop
     running = True
     white_to_move = True
-    
+
 
     sq_selected = () # Keine Auswahl am Anfang, speichert den zuletzt geklickten Ort
     player_clicks = [] # Enthält zwei Klicks (Start- und Endposition)
@@ -64,20 +64,20 @@ def main():
                         continue
                     
                     # Überprüfe, ob der richtige Spieler am Zug ist
-                if(white_to_move and piece [0] == 'w') or (not white_to_move and piece[0] == 'b'):
-                    if isValidMove(start_sq, end_sq, gs.board):
-                        gs.board[end_sq[0]][end_sq[1]] = gs.board[start_sq[0]][start_sq[1]]
-                        gs.board[start_sq[0]][start_sq[1]] = "--"
-                        white_to_move = not white_to_move # Spielerwechsel nach erfolgreichem Zug
-                        print("Move successful. Next player!")
+                    if(white_to_move and piece [0] == 'w') or (not white_to_move and piece[0] == 'b'):
+                        if isValidMove(start_sq, end_sq, gs.board):
+                            gs.board[end_sq[0]][end_sq[1]] = gs.board[start_sq[0]][start_sq[1]]
+                            gs.board[start_sq[0]][start_sq[1]] = "--"
+                            white_to_move = not white_to_move # Spielerwechsel nach erfolgreichem Zug
+                            print("Move successful. Next player!")
 
+                        else:
+                            print("Invalid move!")
                     else:
-                        print("Invalid move!")
-                else:
-                    print("Not your turn!")
+                        print("Not your turn!")
 
-                sq_selected = ()  # Zurücksetzen
-                player_clicks = []
+                    sq_selected = ()  # Zurücksetzen
+                    player_clicks = []
                     
                 
         drawGameState(screen, gs, sq_selected)
