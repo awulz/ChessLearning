@@ -18,11 +18,14 @@ class GameState():
             ["wR", "wN", "wB", "wQ", "wK", "wB", "wN", "wR"]]
         self.whiteToMove = True
         self.moveLog = []
-
         self.white_king_moved = False
         self.black_king_moved = False
-        self.white_rock_king_moved = False # Königseite
-        self.white_rock_queen_moved = False # Damnseite
+        self.white_rook_king_moved = False # Königseite
+        self.white_rook_queen_moved = False # Damnseite
         self.black_rook_king_moved = False
         self.black_rook_queen_moved = False
+        self.in_check = False
+        self.pins = [] # Liste von gefesselten Figuren
+        self.checks = [] # Liste von Schachangriffen auf den König
+
 

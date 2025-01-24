@@ -34,6 +34,7 @@ def main():
 
     sq_selected = () # Keine Auswahl am Anfang, speichert den zuletzt geklickten Ort
     player_clicks = [] # Enthält zwei Klicks (Start- und Endposition)
+    castling_moves = []  # Castling preview moves
 
     while running:
         for e in p.event.get():
@@ -47,9 +48,17 @@ def main():
                 if sq_selected == (row, col): # Doppelklick auf das gleiche Feld
                     sq_selected = () # Auswahl zurücksetzen
                     player_clicks = [] # Klicks zurücksetzen
+                    castling_moves = [] # Clear castling preview
                 else:
                     sq_selected = (row, col)
                     player_clicks.append(sq_selected)
+                
+                # Castling preview logic when king is selected
+                piece = gs.board[row][col]
+                if piece[1] == "K":
+                    castling_moves = getCastleMoves(gs, white_to_move)
+                else:
+                    castling_moves = []  # Clear castling preview
                 
                 if len(player_clicks) == 2: # Nach zwei Klicks versuchen, die Figur zu bewegen
                     start_sq = player_clicks[0]
@@ -65,7 +74,7 @@ def main():
                     
                     # Überprüfe, ob der richtige Spieler am Zug ist
                     if(white_to_move and piece [0] == 'w') or (not white_to_move and piece[0] == 'b'):
-                        if isValidMove(start_sq, end_sq, gs.board):
+                        if isValidMove(start_sq, end_sq, gs.board, gs):
 
                             # Rochade erkennen und ausführen
                             if piece[1] == "K" and abs(start_sq[1] - end_sq[1]) == 2:
@@ -108,24 +117,46 @@ def main():
 
                     sq_selected = ()  # Zurücksetzen
                     player_clicks = []
+                    castling_moves = []  # Clear preview after move
                     
                 
-        drawGameState(screen, gs, sq_selected)
+        drawGameState(screen, gs, sq_selected, castling_moves)
         clock.tick(MAX_FPS)
         p.display.flip()
 
 # Responsible for all the Graphics in the current game state.
-def drawGameState(screen, gs, sq_selected):
-    drawBoard(screen, sq_selected)  # These functions will draw the squares on the board
+def drawGameState(screen, gs, sq_selected, castling_moves=[]):
+    drawBoard(screen, sq_selected, castling_moves)  # These functions will draw the squares on the board
     drawPieces(screen, gs.board)  # Draw pieces on top of those squares
 
 # Top-left squares are always light.
-def drawBoard(screen, sq_selected):
+def drawBoard(screen, sq_selected, castling_moves=[]):
     colors = [p.Color("White"), p.Color("Gray")]
+    highlight_color = p.Color("Yellow") # Farbe für Castling-Preview
+    font = p.font.SysFont("Arial", 12, bold=True) # Schriftart für Koordinaten
+
+    # Reihen- und Spalten-Beschriftungen
+    ranks = [str(8 - i) for i in range(8)]  # Zahlen 8 bis 1 für Reihen
+    files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']  # Buchstaben für Spalten
+
     for r in range(DIMENSION):
         for c in range(DIMENSION):
             color = colors[(r + c) % 2]
+
+            if sq_selected == (r, c):
+                color = p.Color("Blue")
+
+            if(r,c) in castling_moves:
+                color = highlight_color # Highlight Castling-Moves
+
             p.draw.rect(screen, color, p.Rect(c * SQ_SIZE, r * SQ_SIZE, SQ_SIZE, SQ_SIZE))
+        
+            if c == 0:
+                rank_text = font.render(ranks[r], True, p.Color("Black"))
+                screen.blit(rank_text, (5, r * SQ_SIZE + 5))
+            if r == 7:
+                file_text = font.render(files[c], True, p.Color("Black"))
+                screen.blit(file_text, (c * SQ_SIZE + SQ_SIZE - 12, r * SQ_SIZE + 0))
 
     # Highlight selected square
     if sq_selected != ():
@@ -144,12 +175,17 @@ def drawPieces(screen, board):
             if piece != "--":  # Check for empty square
                 screen.blit(IMAGES[piece], p.Rect(c * SQ_SIZE, r * SQ_SIZE, SQ_SIZE, SQ_SIZE))
 
-def isValidMove(start_sq, end_sq, board):
+def isValidMove(start_sq, end_sq, board, gs):
     start_row, start_col = start_sq
     end_row, end_col = end_sq
     piece = board[start_row][start_col]
     target_piece = board[end_row][end_col]
 
+    for pin in gs.pins:
+        if pin[0] == start_row and pin[1] == start_col:
+            if pin[2] != (end_row - start_row) or pin[3] != (end_col - start_col):
+                return False  # Bewegung nicht erlaubt aufgrund der Fesselung
+            
     if target_piece != "--" and piece[0] == target_piece[0]:
         print("Invalid move: Cannot capture own piece!")
         return False
@@ -170,11 +206,11 @@ def isValidMove(start_sq, end_sq, board):
     elif piece_type == "Q": # Dame
         return isValidQueenMove(start_sq, end_sq, board)
     elif piece_type == "K": # König
-        return isValidKingMove(start_sq, end_sq, board)
+        return isValidKingMove(start_sq, end_sq, board, piece[0] == 'w', gs)
     
     return False # Standardmässig ungültiger Zug
 
-def canCastleKingside(board, isWhite):
+def canCastleKingside(board, isWhite, gs):
     row = 7 if isWhite else 0
 
     if isWhite and (gs.white_king_moved or gs.white_rook_king_moved):
@@ -188,7 +224,7 @@ def canCastleKingside(board, isWhite):
     return False
 
 
-def canCastleQueenside(board, isWhite):
+def canCastleQueenside(board, isWhite, gs):
     row = 7 if isWhite else 0
 
     if isWhite and (gs.white_king_moved or gs.white_rook_queen_moved):
@@ -277,7 +313,7 @@ def isValidQueenMove(start_sq, end_sq, board):
 
 
 
-def isValidKingMove(start_sq, end_sq, board):
+def isValidKingMove(start_sq, end_sq, board, isWhite, gs):
     start_row, start_col = start_sq
     end_row, end_col = end_sq
 
@@ -289,8 +325,79 @@ def isValidKingMove(start_sq, end_sq, board):
         # Stelle sicher, dass das Zielfeld nicht von derselben Farbe ist
         if board[end_row][end_col] == "--" or board[end_row][end_col][0] != board[start_row][start_col][0]:
             return True
+    
+    if col_diff == 2 and row_diff == 0:
+        if end_col == 6 and canCastleKingside(board, isWhite, gs):  # kurze Rochade
+            return True
+        elif end_col == 2 and canCastleQueenside(board, isWhite, gs):  # lange Rochade
+            return True
+
     return False
 
+def getCastleMoves(gs, isWhite):
+    moves = []
+    row = 7 if isWhite else 0
+
+    # Prüfen, ob Rochade möglich ist
+    if canCastleKingside(gs.board, isWhite, gs):
+        moves.append((row, 6))  # King-Side Castling (g1 / g8)
+
+    if canCastleQueenside(gs.board, isWhite, gs):
+        moves.append((row, 2))  # Queen-Side Castling (c1 / c8)
+
+    return moves
+
+def checkForPinsAndChecks(gs, isWhite):
+    pins = []  # Gefesselte Figuren
+    checks = []  # Schachbedrohungen
+    in_check = False
+
+    # Finde die Position des Königs
+    king_row, king_col = None, None
+    for r in range(8):
+        for c in range(8):
+            if gs.board[r][c] == ('wK' if isWhite else 'bK'):
+                king_row, king_col = r, c
+                break
+
+    # Richtungen für mögliche Angriffe (Turm, Läufer, Dame)
+    directions = [
+        (-1, 0), (1, 0), (0, -1), (0, 1),  # Vertikal, horizontal
+        (-1, -1), (-1, 1), (1, -1), (1, 1)  # Diagonal
+    ]
+
+    for d in directions:
+        possible_pinned_piece = None
+        for i in range(1, 8):
+            end_row, end_col = king_row + d[0] * i, king_col + d[1] * i
+            if 0 <= end_row < 8 and 0 <= end_col < 8:
+                piece = gs.board[end_row][end_col]
+                if piece != "--":
+                    if piece[0] == ('w' if isWhite else 'b'):
+                        if possible_pinned_piece is None:
+                            possible_pinned_piece = (end_row, end_col, d[0], d[1])
+                        else:
+                            break  # Zweite eigene Figur -> kein Pin
+                    else:
+                        # Gegnerische Figur -> prüfen, ob Angriff möglich ist
+                        piece_type = piece[1]
+                        if (piece_type == "R" and d in directions[:4]) or \
+                           (piece_type == "B" and d in directions[4:]) or \
+                           (piece_type == "Q") or \
+                           (piece_type == "P" and i == 1 and ((isWhite and d in [(-1, -1), (-1, 1)]) or (not isWhite and d in [(1, -1), (1, 1)]))) or \
+                           (piece_type == "K" and i == 1):
+                            if possible_pinned_piece is None:
+                                in_check = True
+                                checks.append((end_row, end_col, d[0], d[1]))
+                            else:
+                                pins.append(possible_pinned_piece)
+                            break
+                        else:
+                            break
+            else:
+                break  # Außerhalb des Bretts
+
+    return in_check, pins, checks
 
 
 
