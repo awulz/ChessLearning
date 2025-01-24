@@ -118,6 +118,11 @@ def isValidMove(start_sq, end_sq, board):
     start_row, start_col = start_sq
     end_row, end_col = end_sq
     piece = board[start_row][start_col]
+    target_piece = board[end_row][end_col]
+
+    if target_piece != "--" and piece[0] == target_piece[0]:
+        print("Invalid move: Cannot capture own piece!")
+        return False
 
     if piece == "--":
         return False  # Leeres Feld kann nicht bewegt werden
@@ -138,6 +143,33 @@ def isValidMove(start_sq, end_sq, board):
         return isValidKingMove(start_sq, end_sq, board)
     
     return False # Standardmässig ungültiger Zug
+
+def canCastleKingside(board, isWhite):
+    row = 7 if isWhite else 0
+
+    if isWhite and (gs.white_king_moved or gs.white_rook_king_moved):
+        return False
+    if not isWhite and (gs.black_king_moved or gs.black_rook_king_moved):
+        return False
+
+    # Prüfen, ob Felder zwischen König und Turm frei sind
+    if board[row][5] == "--" and board[row][6] == "--":
+        return True
+    return False
+
+
+def canCastleQueenside(board, isWhite):
+    row = 7 if isWhite else 0
+
+    if isWhite and (gs.white_king_moved or gs.white_rook_queen_moved):
+        return False
+    if not isWhite and (gs.black_king_moved or gs.black_rook_queen_moved):
+        return False
+
+    # Prüfen, ob Felder zwischen König und Turm frei sind
+    if board[row][1] == "--" and board[row][2] == "--" and board[row][3] == "--":
+        return True
+    return False
   
 def isValidPawnMove (start_sq, end_sq, board, color):
     start_row, start_col = start_sq
@@ -205,7 +237,7 @@ def isValidBishopMove(start_sq, end_sq, board):
              if board[r][c] != "--":  # Falls ein anderes Stück im Weg ist
                  return False
              r += step_row
-             c *= step_col
+             c += step_col
         return True
     
     return False
@@ -227,8 +259,8 @@ def isValidKingMove(start_sq, end_sq, board):
         # Stelle sicher, dass das Zielfeld nicht von derselben Farbe ist
         if board[end_row][end_col] == "--" or board[end_row][end_col][0] != board[start_row][start_col][0]:
             return True
-
     return False
+
 
 
 
