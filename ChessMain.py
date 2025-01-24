@@ -290,7 +290,11 @@ def canCastleKingside(board, isWhite, gs):
 
     # Prüfen, ob Felder zwischen König und Turm frei sind
     if board[row][5] == "--" and board[row][6] == "--":
-        return True
+        # Sicherstellen, dass der König nicht im Schach steht und nicht über ein bedrohtes Feld zieht
+        if not isSquareUnderAttack((row, 4), board, isWhite) and \
+           not isSquareUnderAttack((row, 5), board, isWhite) and \
+           not isSquareUnderAttack((row, 6), board, isWhite):
+            return True
     return False
 
 
@@ -304,14 +308,18 @@ def canCastleQueenside(board, isWhite, gs):
 
     # Prüfen, ob Felder zwischen König und Turm frei sind
     if board[row][1] == "--" and board[row][2] == "--" and board[row][3] == "--":
-        return True
+        # Sicherstellen, dass der König nicht im Schach steht und nicht über ein bedrohtes Feld zieht
+        if not isSquareUnderAttack((row, 4), board, isWhite) and \
+           not isSquareUnderAttack((row, 3), board, isWhite) and \
+           not isSquareUnderAttack((row, 2), board, isWhite):
+            return True
     return False
-  
-def isValidPawnMove (start_sq, end_sq, board, color):
+
+def isValidPawnMove(start_sq, end_sq, board, color):
     start_row, start_col = start_sq
     end_row, end_col = end_sq
 
-    direction = -1 if color == "w" else 1 # Weiß bewegt sich nach oben, Schwarz nach unten
+    direction = -1 if color == "w" else 1  # Weiß bewegt sich nach oben, Schwarz nach unten
     
     # Normaler Bauerzug (ein Feld nach vorne)
     if start_col == end_col and board[end_row][end_col] == "--":
@@ -324,15 +332,70 @@ def isValidPawnMove (start_sq, end_sq, board, color):
     
     # Schlagen diagonal
     if abs(start_col - end_col) == 1 and end_row == start_row + direction:
-        if board[end_row][end_col] != "--" and board[end_row][end_col][0] !=color:
+        if board[end_row][end_col] != "--" and board[end_row][end_col][0] != color:
             return True
     
-    #En Passant Schlag
+    # En Passant Schlag (vereinfachte Version, erfordert En Passant-Logik)
     if abs(start_col - end_col) == 1 and end_row == start_row + direction:
         if board[start_row][end_col] == ("bP" if color == "w" else "wP") and board[end_row][end_col] == "--":
             return True
 
     return False
+
+def isSquareUnderAttack(pos, board, isWhite):
+    row, col = pos
+    opponent_color = 'b' if isWhite else 'w'
+
+    # Richtungen für potenzielle Angreifer (Turm, Läufer, Dame)
+    directions = [
+        (-1, 0), (1, 0), (0, -1), (0, 1),  # Vertikal und horizontal
+        (-1, -1), (-1, 1), (1, -1), (1, 1)  # Diagonal
+    ]
+
+    # Überprüfen auf Angriffe durch Türme, Läufer und Damen
+    for d in directions:
+        for i in range(1, 8):
+            end_row, end_col = row + d[0] * i, col + d[1] * i
+            if 0 <= end_row < 8 and 0 <= end_col < 8:
+                piece = board[end_row][end_col]
+                if piece != "--":
+                    if piece[0] == opponent_color:
+                        if (piece[1] == "R" and d in directions[:4]) or \
+                           (piece[1] == "B" and d in directions[4:]) or \
+                           (piece[1] == "Q"):
+                            return True
+                    break
+
+    # Überprüfen auf Springerangriffe
+    knight_moves = [
+        (-2, -1), (-2, 1), (2, -1), (2, 1),
+        (-1, -2), (-1, 2), (1, -2), (1, 2)
+    ]
+    for move in knight_moves:
+        end_row, end_col = row + move[0], col + move[1]
+        if 0 <= end_row < 8 and 0 <= end_col < 8:
+            if board[end_row][end_col] == opponent_color + "N":
+                return True
+
+    # Überprüfen auf Bauernangriffe
+    pawn_moves = [(-1, -1), (-1, 1)] if isWhite else [(1, -1), (1, 1)]
+    for move in pawn_moves:
+        end_row, end_col = row + move[0], col + move[1]
+        if 0 <= end_row < 8 and 0 <= end_col < 8:
+            if board[end_row][end_col] == opponent_color + "P":
+                return True
+
+    # Überprüfen auf König angriffe
+    king_moves = directions + [(1, 1), (-1, -1), (1, -1), (-1, 1)]
+    for move in king_moves:
+        end_row, end_col = row + move[0], col + move[1]
+        if 0 <= end_row < 8 and 0 <= end_col < 8:
+            if board[end_row][end_col] == opponent_color + "K":
+                return True
+
+    return False
+
+
 
 def isValidKnightMove(start_sq, end_sq):
     start_row, start_col = start_sq
@@ -390,12 +453,13 @@ def isValidKingMove(start_sq, end_sq, board, isWhite, gs):
     row_diff = abs(end_row - start_row)
     col_diff = abs(end_col - start_col)
 
-    # Der König darf sich maximal 1 Feld in jede Richtung bewegen
     if row_diff <= 1 and col_diff <= 1:
         # Stelle sicher, dass das Zielfeld nicht von derselben Farbe ist
         if board[end_row][end_col] == "--" or board[end_row][end_col][0] != board[start_row][start_col][0]:
-            return True
-    
+            if not doesMoveLeaveKingInCheck(start_sq, end_sq, board, gs):
+                return True
+
+    # Rochade überprüfen
     if col_diff == 2 and row_diff == 0:
         if end_col == 6 and canCastleKingside(board, isWhite, gs):  # kurze Rochade
             return True
@@ -403,6 +467,7 @@ def isValidKingMove(start_sq, end_sq, board, isWhite, gs):
             return True
 
     return False
+
 
 def getCastleMoves(gs, isWhite):
     moves = []
@@ -469,20 +534,63 @@ def checkForPinsAndChecks(gs, isWhite):
 
     return in_check, pins, checks
 
-def isCheckmateOrStalemate(gs, isWhite):
+def doesMoveLeaveKingInCheck(start_sq, end_sq, board, gs):
+    temp_board = [row[:] for row in board]  # Kopiere das aktuelle Board
+    temp_board[end_sq[0]][end_sq[1]] = temp_board[start_sq[0]][start_sq[1]]
+    temp_board[start_sq[0]][start_sq[1]] = "--"
+
+    # Bestimme, wessen König wir überprüfen müssen
+    king_color = "w" if board[start_sq[0]][start_sq[1]][0] == 'w' else "b"
+
+    # Finde die Position des Königs
+    king_pos = None
     for r in range(8):
         for c in range(8):
-            if gs.board[r][c][0] == ('w' if isWhite else 'b'):
+            if temp_board[r][c] == (king_color + "K"):
+                king_pos = (r, c)
+                break
+
+    if king_pos is None:
+        return True  # König ist nicht auf dem Brett (Fehler)
+
+    # Prüfe, ob der König nach dem Zug im Schach steht
+    gs_copy = GameState()
+    gs_copy.board = temp_board  # Manuelles Zuweisen des kopierten Boards
+    in_check, _, _ = checkForPinsAndChecks(gs_copy, king_color == 'w')
+    return in_check
+
+
+def isCheckmateOrStalemate(gs, isWhite):
+    gs.in_check, gs.pins, gs.checks = checkForPinsAndChecks(gs, isWhite)
+    
+    legal_moves_exist = False
+
+    # Alle Figuren durchsuchen
+    for r in range(8):
+        for c in range(8):
+            piece = gs.board[r][c]
+            if piece != "--" and ((isWhite and piece[0] == 'w') or (not isWhite and piece[0] == 'b')):
                 for row in range(8):
                     for col in range(8):
                         if isValidMove((r, c), (row, col), gs.board, gs):
-                            return False  # Es gibt noch legale Züge
+                            if not doesMoveLeaveKingInCheck((r, c), (row, col), gs.board, gs):
+                                legal_moves_exist = True
+                                break
+                    if legal_moves_exist:
+                        break
+            if legal_moves_exist:
+                break
 
-    if gs.in_check:
-        print("Checkmate!")
-    else:
-        print("Stalemate!")
-    return True
+    if not legal_moves_exist:
+        if gs.in_check:
+            print("Checkmate detected!")
+            return True  # Schachmatt
+        else:
+            print("Stalemate detected!")
+            return True  # Patt
+
+    return False  # Noch legale Züge verfügbar
+
 
 
 
