@@ -29,12 +29,14 @@ def main():
     gs = GameState()  # Hier wurde die Instanziierung korrigiert
     loadImages()  # Only do this once, before the while loop
     running = True
-    white_to_move = True
+    white_to_move = gs.whiteToMove
 
 
     sq_selected = () # Keine Auswahl am Anfang, speichert den zuletzt geklickten Ort
     player_clicks = [] # Enthält zwei Klicks (Start- und Endposition)
     castling_moves = []  # Castling preview moves
+
+    prev_game_state = None # Variable zum Speichern des vorherigen Spielstatus
 
     while running:
         for e in p.event.get():
@@ -131,9 +133,13 @@ def main():
                     
                 
         drawGameState(screen, gs, sq_selected, castling_moves)
+
         clock.tick(MAX_FPS)
-        if isCheckmateOrStalemate(gs, white_to_move):
-            running = False
+        if gs != prev_game_state:
+            if isCheckmateOrStalemate(gs, gs.whiteToMove):
+                print("Game over!")
+                running = False
+        prev_game_state = gs
 
         p.display.flip()
 
@@ -252,18 +258,25 @@ def isValidMove(start_sq, end_sq, board, gs):
 
     # Prüfen, ob ein eigenes Stück angegriffen wird
     if target_piece != "--" and piece[0] == target_piece[0]:
-        if not hasattr(gs, 'invalid_move_logged'):
-            print(f"Invalid move: Cannot capture own piece at {end_sq}")
-            gs.invalid_move_logged = True
+        print(f"Invalid move: Cannot capture own piece at {end_sq}")
         return False
 
-    # Überprüfen, ob das Feld festgesetzt ist (Pins)
-    for pin in gs.pins:
-        if pin[0] == start_row and pin[1] == start_col:
-            print(f"Pin detected: {start_sq} -> {end_sq}, allowed direction: {(pin[2], pin[3])}")
-            if (end_row - start_row, end_col - start_col) != (pin[2], pin[3]):
-                print("Invalid move: Piece is pinned!")
-                return False  # Bewegung nicht erlaubt aufgrund der Fesselung
+    # Stelle sicher, dass die Regeln für die Figuren korrekt überprüft werden
+    if piece[1] == "P":  # Bauer
+        return isValidPawnMove(start_sq, end_sq, board, piece[0])
+    elif piece[1] == "N":  # Springer
+        return isValidKnightMove(start_sq, end_sq)
+    elif piece[1] == "R":  # Turm
+        return isValidRookMove(start_sq, end_sq, board)
+    elif piece[1] == "B":  # Läufer
+        return isValidBishopMove(start_sq, end_sq, board)
+    elif piece[1] == "Q":  # Dame
+        return isValidQueenMove(start_sq, end_sq, board)
+    elif piece[1] == "K":  # König
+        return isValidKingMove(start_sq, end_sq, board, piece[0] == 'w', gs)
+
+    return False  # Falls nichts passt, ist es ein ungültiger Zug
+
 
     # Überprüfen, ob der Zug den König im Schach lässt
 def doesMoveLeaveKingInCheck(start_sq, end_sq, board, gs):
@@ -483,14 +496,17 @@ def checkForPinsAndChecks(gs, isWhite):
     return in_check, pins, checks
 
 def isCheckmateOrStalemate(gs, isWhite):
+    # Überprüfen, ob der König im Schach steht
     gs.in_check, gs.pins, gs.checks = checkForPinsAndChecks(gs, isWhite)
     
     legal_moves_exist = False
     for r in range(8):
         for c in range(8):
-            if gs.board[r][c][0] == ('w' if isWhite else 'b'):
+            piece = gs.board[r][c]
+            if piece != "--" and ((isWhite and piece[0] == 'w') or (not isWhite and piece[0] == 'b')):
                 for row in range(8):
                     for col in range(8):
+                        # Stelle sicher, dass die Funktion gültige Züge korrekt überprüft
                         if isValidMove((r, c), (row, col), gs.board, gs):
                             if not doesMoveLeaveKingInCheck((r, c), (row, col), gs.board, gs):
                                 legal_moves_exist = True
@@ -503,14 +519,15 @@ def isCheckmateOrStalemate(gs, isWhite):
     print(f"Legal moves exist: {legal_moves_exist}, In check: {gs.in_check}")
 
     if legal_moves_exist:
-        return False  # Es gibt noch legale Züge
+        return False  # Es gibt noch legale Züge, kein Patt
 
     if gs.in_check:
         print("Checkmate detected!")
     else:
-        print("Stalemate detected!")
+        print("Stalemate detected! No legal moves available.")
 
-    return True  # Wenn keine legalen Züge mehr vorhanden sind, ist es Schachmatt oder Patt
+    return True  # Wenn keine legalen Züge vorhanden sind, ist es Schachmatt oder Patt
+
 
 
 
