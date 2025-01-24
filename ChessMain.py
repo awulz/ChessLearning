@@ -246,38 +246,51 @@ def isValidMove(start_sq, end_sq, board, gs):
     piece = board[start_row][start_col]
     target_piece = board[end_row][end_col]
 
-    # Überprüfen, ob das Feld festgesetzt ist
-    for pin in gs.pins:
-        if pin[0] == start_row and pin[1] == start_col:
-            if pin[2] != (end_row - start_row) or pin[3] != (end_col - start_col):
-                return False  # Bewegung nicht erlaubt aufgrund der Fesselung
-            
+    # Überprüfen, ob das Startfeld leer ist
+    if piece == "--":
+        return False  # Leeres Feld kann nicht bewegt werden
+
     # Prüfen, ob ein eigenes Stück angegriffen wird
     if target_piece != "--" and piece[0] == target_piece[0]:
         if not hasattr(gs, 'invalid_move_logged'):
-            print("Invalid move: Cannot capture own piece!")
+            print(f"Invalid move: Cannot capture own piece at {end_sq}")
             gs.invalid_move_logged = True
         return False
 
-    if piece == "--":
-        return False  # Leeres Feld kann nicht bewegt werden
-    
-    piece_type = piece[1]  # Zweites Zeichen gibt die Art der Figur an
+    # Überprüfen, ob das Feld festgesetzt ist (Pins)
+    for pin in gs.pins:
+        if pin[0] == start_row and pin[1] == start_col:
+            print(f"Pin detected: {start_sq} -> {end_sq}, allowed direction: {(pin[2], pin[3])}")
+            if (end_row - start_row, end_col - start_col) != (pin[2], pin[3]):
+                print("Invalid move: Piece is pinned!")
+                return False  # Bewegung nicht erlaubt aufgrund der Fesselung
 
-    if piece_type == "P":  # Bauer
-        return isValidPawnMove(start_sq, end_sq, board, piece[0])
-    elif piece_type == "R":  # Turm
-        return isValidRookMove(start_sq, end_sq, board)
-    elif piece_type == "N":  # Springer
-        return isValidKnightMove(start_sq, end_sq)
-    elif piece_type == "B":  # Läufer
-        return isValidBishopMove(start_sq, end_sq, board)
-    elif piece_type == "Q":  # Dame
-        return isValidQueenMove(start_sq, end_sq, board)
-    elif piece_type == "K":  # König
-        return isValidKingMove(start_sq, end_sq, board, piece[0] == 'w', gs)
+    # Überprüfen, ob der Zug den König im Schach lässt
+def doesMoveLeaveKingInCheck(start_sq, end_sq, board, gs):
+    temp_board = [row[:] for row in board]  # Kopie des Spielfelds erstellen
+    temp_board[end_sq[0]][end_sq[1]] = temp_board[start_sq[0]][start_sq[1]]
+    temp_board[start_sq[0]][start_sq[1]] = "--"
+
+    king_color = "wK" if board[start_sq[0]][start_sq[1]][0] == 'w' else "bK"
     
-    return False  # Standardmäßig ungültiger Zug
+    # Königslage suchen
+    king_pos = None
+    for r in range(8):
+        for c in range(8):
+            if temp_board[r][c] == king_color:
+                king_pos = (r, c)
+                break
+
+    if king_pos is None:
+        print("FEHLER: König nicht gefunden auf dem Brett!")
+        return True
+
+    # Prüfen, ob der König im Schach steht
+    in_check, _, _ = checkForPinsAndChecks(gs, king_color[0] == 'w')
+    if in_check:
+        print(f"König bleibt im Schach nach {start_sq} -> {end_sq}")
+    return in_check
+
 
 
 def canCastleKingside(board, isWhite, gs):
@@ -470,19 +483,60 @@ def checkForPinsAndChecks(gs, isWhite):
     return in_check, pins, checks
 
 def isCheckmateOrStalemate(gs, isWhite):
+    gs.in_check, gs.pins, gs.checks = checkForPinsAndChecks(gs, isWhite)
+    
+    legal_moves_exist = False
     for r in range(8):
         for c in range(8):
             if gs.board[r][c][0] == ('w' if isWhite else 'b'):
                 for row in range(8):
                     for col in range(8):
                         if isValidMove((r, c), (row, col), gs.board, gs):
-                            return False  # Es gibt noch legale Züge
+                            if not doesMoveLeaveKingInCheck((r, c), (row, col), gs.board, gs):
+                                legal_moves_exist = True
+                                break
+                    if legal_moves_exist:
+                        break
+            if legal_moves_exist:
+                break
+
+    print(f"Legal moves exist: {legal_moves_exist}, In check: {gs.in_check}")
+
+    if legal_moves_exist:
+        return False  # Es gibt noch legale Züge
 
     if gs.in_check:
-        print("Checkmate!")
+        print("Checkmate detected!")
     else:
-        print("Stalemate!")
-    return True
+        print("Stalemate detected!")
+
+    return True  # Wenn keine legalen Züge mehr vorhanden sind, ist es Schachmatt oder Patt
+
+
+
+
+def doesMoveLeaveKingInCheck(start_sq, end_sq, board, gs):
+    temp_board = [row[:] for row in board]  # Kopiere das aktuelle Board
+    temp_board[end_sq[0]][end_sq[1]] = temp_board[start_sq[0]][start_sq[1]]
+    temp_board[start_sq[0]][start_sq[1]] = "--"
+
+    # Bestimme, wessen König wir überprüfen müssen
+    king_color = "wK" if board[start_sq[0]][start_sq[1]][0] == 'w' else "bK"
+
+    # Finde die Position des Königs
+    king_pos = None
+    for r in range(8):
+        for c in range(8):
+            if temp_board[r][c] == king_color:
+                king_pos = (r, c)
+                break
+
+    if king_pos is None:
+        return True  # König ist nicht auf dem Brett (Fehler)
+
+    # Prüfe, ob der König nach dem Zug im Schach steht
+    in_check, _, _ = checkForPinsAndChecks(gs, king_color[0] == 'w')
+    return in_check
 
 
 
