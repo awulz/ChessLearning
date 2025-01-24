@@ -75,6 +75,11 @@ def main():
                     # Überprüfe, ob der richtige Spieler am Zug ist
                     if(white_to_move and piece [0] == 'w') or (not white_to_move and piece[0] == 'b'):
                         if isValidMove(start_sq, end_sq, gs.board, gs):
+                            # Erfolgreichen Zug durchführen
+                            gs.board[end_sq[0]][end_sq[1]] = gs.board[start_sq[0]][start_sq[1]]
+                            gs.board[start_sq[0]][start_sq[1]] = "--"
+                            
+                            
 
                             # Rochade erkennen und ausführen
                             if piece[1] == "K" and abs(start_sq[1] - end_sq[1]) == 2:
@@ -85,9 +90,7 @@ def main():
                                     gs.board[start_sq[0]][3] = gs.board[start_sq[0]][0]  # Turm nach d1/d8
                                     gs.board[start_sq[0]][0] = "--"
                             
-                            # König oder Turm an neue Position setzen
-                            gs.board[end_sq[0]][end_sq[1]] = gs.board[start_sq[0]][start_sq[1]]
-                            gs.board[start_sq[0]][start_sq[1]] = "--"
+                           
 
                             # Rochade-Berechtigungen entfernen
                             if piece[1] == "K":
@@ -109,9 +112,16 @@ def main():
 
                             white_to_move = not white_to_move # Spielerwechsel nach erfolgreichem Zug
                             print("Move successful. Next player!")
-                       
+
+                            # Überprüfe nach dem Zug auf Schach und Pins
+                            gs.in_check, gs.pins, gs.checks = checkForPinsAndChecks(gs, white_to_move)
+                            if gs.in_check:
+                                print("Check!")
+
                         else:
                             print("Invalid move!")
+                            player_clicks = []
+                            sq_selected = ()
                     else:
                         print("Not your turn!")
 
@@ -122,6 +132,9 @@ def main():
                 
         drawGameState(screen, gs, sq_selected, castling_moves)
         clock.tick(MAX_FPS)
+        if isCheckmateOrStalemate(gs, white_to_move):
+            running = False
+
         p.display.flip()
 
 # Responsible for all the Graphics in the current game state.
@@ -233,34 +246,39 @@ def isValidMove(start_sq, end_sq, board, gs):
     piece = board[start_row][start_col]
     target_piece = board[end_row][end_col]
 
+    # Überprüfen, ob das Feld festgesetzt ist
     for pin in gs.pins:
         if pin[0] == start_row and pin[1] == start_col:
             if pin[2] != (end_row - start_row) or pin[3] != (end_col - start_col):
                 return False  # Bewegung nicht erlaubt aufgrund der Fesselung
             
+    # Prüfen, ob ein eigenes Stück angegriffen wird
     if target_piece != "--" and piece[0] == target_piece[0]:
-        print("Invalid move: Cannot capture own piece!")
+        if not hasattr(gs, 'invalid_move_logged'):
+            print("Invalid move: Cannot capture own piece!")
+            gs.invalid_move_logged = True
         return False
 
     if piece == "--":
         return False  # Leeres Feld kann nicht bewegt werden
     
-    piece_type = piece[1] # Zweites Zeichen gibt die Art der Figur an
+    piece_type = piece[1]  # Zweites Zeichen gibt die Art der Figur an
 
-    if piece_type == "P": # Bauer
+    if piece_type == "P":  # Bauer
         return isValidPawnMove(start_sq, end_sq, board, piece[0])
-    elif piece_type == "R": # Turm
+    elif piece_type == "R":  # Turm
         return isValidRookMove(start_sq, end_sq, board)
-    elif piece_type == "N": # Springer
+    elif piece_type == "N":  # Springer
         return isValidKnightMove(start_sq, end_sq)
-    elif piece_type == "B": # Läufer
+    elif piece_type == "B":  # Läufer
         return isValidBishopMove(start_sq, end_sq, board)
-    elif piece_type == "Q": # Dame
+    elif piece_type == "Q":  # Dame
         return isValidQueenMove(start_sq, end_sq, board)
-    elif piece_type == "K": # König
+    elif piece_type == "K":  # König
         return isValidKingMove(start_sq, end_sq, board, piece[0] == 'w', gs)
     
-    return False # Standardmässig ungültiger Zug
+    return False  # Standardmäßig ungültiger Zug
+
 
 def canCastleKingside(board, isWhite, gs):
     row = 7 if isWhite else 0
